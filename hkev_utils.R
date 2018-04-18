@@ -803,21 +803,21 @@ newval = function(g, col, val) {
         }
         if (length(val) == 1 | is.null(val)) {
             for (i in 1:length(col)) {
-                values(g)[, col[i]] = val[[1]]
+                mcols(g)[, col[i]] = val[[1]]
             }
         } else if (length(val) > 1) {
             if (is_list) {
                 for (i in 1:length(col)) {
-                    values(g)[, col[i]] = val[[i]]
+                    mcols(g)[, col[i]] = val[[i]]
                 }
             } else {
                 for (i in 1:length(col)) {
-                    values(g)[, col[i]] = val
+                    mcols(g)[, col[i]] = val
                 }
             }
         }
     } else {
-        values(g)[, col] = val
+        mcols(g)[, col] = val
     }
     return(g)
 }
@@ -825,7 +825,7 @@ newval = function(g, col, val) {
 
 
 checkfin = function(outpath) {
-    cmd = paste0("tail -n 10 ", outpath, " | grep \"Exit status\\: 0\"")
+    cmd = paste0("tail -n 10 ", outpath, " | grep \"Exit status\\:\"")
     finish_line = system(cmd, intern = TRUE)
     if (length(finish_line) > 0) {
         return("finished")
@@ -1003,4 +1003,51 @@ reassign = function(variables_lst, calling_env = parent.frame()) {
 grepout = function(str, grepe) {
     grepe = paste0(grepe, collapse = "|")
     str[!grepl(grepe, str)]
+}
+
+
+newelmcols = function(grl, cols, val) {
+    gr = unlist(grl)
+    gr = newval(gr, cols, val)
+    grl = relist(gr, grl)
+    return(grl)
+}
+
+
+color_grlreads = function(reads_grl, plus = "red", minus = "blue") {
+    tmp = gr2dt(unlist(reads_grl))
+    ## avoiding naming collisions of "plus" and "minus"
+    this_env = environment()
+    tmp[strand == "+", col := this_env$plus]
+    tmp[strand == "-", col := this_env$minus]
+    tmp = dt2gr(tmp)
+    tmp = relist(tmp, reads_grl)
+    mcols(tmp) = mcols(reads_grl)
+    return(tmp)
+}
+
+
+split_cigar = function(reads_grl, only_M = FALSE) {
+    tmp = grl.unlist(splice.cigar(reads_grl))
+    tmp$cigar = paste0(width(tmp), tmp$type)
+    if (only_M) {
+        tmp = tmp[na2false(tmp$type == "M")]
+    }
+    
+    tmp = split(tmp, tmp$qname, drop = TRUE)
+    return(tmp)
+}
+
+split_conc = function(str, ind = 1, split = "_", collapse = split, include_last = FALSE) {
+    unlist(lapply(strsplit(str, split = split), function(s)
+    {
+        this_ind = pmin(ind, length(s))
+        if (!length(s) %in% this_ind) {
+            if (include_last) {
+                this_ind = c(this_ind, length(s))
+            }
+        }
+        ## intersect(this_ind, 1:length(s))
+        paste0(s[this_ind], collapse = collapse)
+    }))
 }
