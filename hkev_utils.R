@@ -1051,3 +1051,27 @@ split_conc = function(str, ind = 1, split = "_", collapse = split, include_last 
         paste0(s[this_ind], collapse = collapse)
     }))
 }
+
+dfbr = function(mod) {
+    coef = as.data.frame(summary(mod)$coefficients$mean)
+    colnames(coef) = c("estimate", "se", "stat", "p")
+    coef$ci.lower = coef$estimate - 1.96 * coef$se
+    coef$ci.upper = coef$estimate + 1.96 * coef$se
+    if (mod$link$mean$name %in% c("log", "logit")) {
+        coef$estimate = exp(coef$estimate)
+        coef$ci.upper = exp(coef$ci.upper)
+        coef$ci.lower = exp(coef$ci.lower)
+    }
+    nm = rownames(coef)
+    out = data.frame(name = nm, method = mod$method,
+                     p = signif(coef$p, 3), estimate = coef$estimate,
+                     ci.lower = coef$ci.lower, ci.upper = coef$ci.upper,
+                     effect = paste(signif(coef$estimate, 3), " [", signif(coef$ci.lower,
+                                                                           3), "-", signif(coef$ci.upper, 3), "]", sep = ""))
+    out$effect = as.character(out$effect)
+    out$name = as.character(out$name)
+    out$method = as.character(out$method)
+    rownames(out) = NULL
+    return(as.data.table(out))
+    return(out)
+}
