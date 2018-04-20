@@ -1007,9 +1007,11 @@ grepout = function(str, grepe) {
 
 
 newelmcols = function(grl, cols, val) {
-    gr = unlist(grl)
+    tmp_nm = names(grl)
+    gr = unlist(grl, use.names = FALSE)
     gr = newval(gr, cols, val)
     grl = relist(gr, grl)
+    names(grl) = tmp_nm
     return(grl)
 }
 
@@ -1074,4 +1076,35 @@ dfbr = function(mod) {
     rownames(out) = NULL
     return(as.data.table(out))
     return(out)
+}
+
+
+plot_tsne_grid = function(dat, dat_group, col = NA, param_grid = NULL, mc.cores = 1) {
+    library(ggplot2)
+    if (is.null(param_grid)) {
+        perps = c(10,20,30,40,50)
+        iters = c(1000,3000,5000,10000)
+        param_grid = expand.grid(perp = perps, iter = iters)
+    }
+    these_plots = mclapply(1:nrow(param_grid), function(this_row)
+    {
+        tmp = param_grid[this_row,]
+        tts = Rtsne(dat, perplexity = tmp$perp, check_duplicates = FALSE, max_iter = tmp$iter)
+        p = data.table(x = tts$Y[,1], y = tts$Y[,2], col = col, group = dat_group)
+        gg = ggplot(p, aes(x = x, y = y, color = group)) + geom_point(size = 2.5) + xlab("tSNE 1") + ylab("tSNE 2") + ggtitle(sprintf("perp = %s\niter= %s", tmp$perp, tmp$iter)) + theme_bw(base_size = 25) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), plot.background = element_blank(), axis.line = element_line(colour = "black"))
+        if (!is.na(col)) {
+            gg = gg + scale_color_manual(values = col)
+        }
+        return(gg)
+    }, mc.cores = mc.cores, mc.preschedule = FALSE)
+    expr = expression(
+    {
+        lapply(these_plots, function(this_plot)
+        {
+            print(this_plot)
+        })
+    })
+    ppdf(eval(expr))
+    return(these_plots)
+    ## NULL
 }
