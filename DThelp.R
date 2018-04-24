@@ -152,6 +152,7 @@ merge.repl = function(dt.x,
                       suffix = NULL,
                       sep = "_",
                       replace_NA = TRUE,
+                      force_y = TRUE,
                       ...)
 {
     arg_lst = as.list(match.call())
@@ -189,7 +190,11 @@ merge.repl = function(dt.x,
                 y_cname = paste0(this_col, ".y")
                 x_col = as.data.frame(dt.repl)[, x_cname]
                 y_col = as.data.frame(dt.repl)[, y_cname]
-                new_col = ifelse(is.na(x_col) & !is.na(y_col), y_col, x_col)
+                if (force_y) {
+                    new_col = ifelse(!is.na(y_col), y_col, x_col)
+                } else {
+                    new_col = ifelse(is.na(x_col) & !is.na(y_col), y_col, x_col)
+                }                
                 dt.repl[, eval(dc(c(x_cname, y_cname))) := NULL]
                 dt.repl[, eval(dc(this_col)) := new_col]
             })
