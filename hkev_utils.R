@@ -1127,3 +1127,56 @@ gsub_col = function(pattern, replacement, df) {
     }
     return(df)
 }
+
+
+
+process_text = function(path, num_lines = 10000, extra_row = FALSE, row.names = NULL, expr = NULL, write.path = NULL) {
+    con = file(description = path, open = "r")
+    raw_header = readLines(con = con, n = 1)
+    the_header = strsplit(raw_header, "\\s+")[[1]]
+    if (extra_row) {
+        the_header = c("", the_header)
+    }
+    if (! is.null(expr)) {
+        if (inherits(expr, "character")) {
+            expr = parse(text = expr)
+        } else if (inherits(expr, "expression")) {
+            expr
+        } else {
+            stop("expr either needs to be a character or expression to be evaluated within j of data_table[i, j]")
+        }
+    }
+    if (!is.null(write.path)) {
+        write.path = rm_mparen(paste0(normalizePath(dirname(write.path)), "/", basename(write.path)))
+        ## write_con = file(write.path, open = "w+")
+        if (file.exists(write.path)) {
+            msg = sprintf("write.path=%s exists! Please remove before processing text", write.path)
+            stop(msg)
+        }
+    }
+    counter = 1
+    while (TRUE) {
+        these_lines = readLines(con = con, n = num_lines)
+        if (length(these_lines) == 0) {
+            break
+        }
+        tmp_tbl = read.table(text = these_lines, row.names = row.names)
+        these_rownames = rownames(tmp_tbl)
+        data.table::setnames(tmp_tbl, the_header)
+        tmp_tbl = as.data.table(tmp_tbl)
+        if (!is.null(expr)) {
+            tmp_tbl[, eval(expr)]
+        }
+        if (!is.null(write.path)) {
+            write.table(setRownames(as.data.frame(tmp_tbl), these_rownames),
+                        file = write.path,
+                        append = TRUE,
+                        row.names = if (is.null(row.names)) { FALSE } else { as.logical(sign(row.names)) },
+                        col.names = if (counter == 1) { TRUE } else { FALSE },
+                        quote = FALSE,
+                        sep = "\t")
+        }
+        message(counter * num_lines, " lines processed")
+        counter = counter + 1
+    }
+}
