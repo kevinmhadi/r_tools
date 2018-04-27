@@ -6,6 +6,13 @@ fullSD = function(.SD, .BY)
     cbind(copy(.SD), data.table(t(unlist(.BY))))
 }
 
+fullSD2 = function(p_env = parent.env(environment())) {
+    expr = expression(cbind(.SD, data.table(t(unlist(.BY)))))
+    eval(expr, envir = parent.env(environment()))
+}
+
+    
+
 v = function (expr) {
     base::eval(expr, sys.frame(4), sys.frame(1))
 }
@@ -190,7 +197,7 @@ merge.repl = function(dt.x,
                 y_cname = paste0(this_col, ".y")
                 x_col = as.data.frame(dt.repl)[, x_cname]
                 y_col = as.data.frame(dt.repl)[, y_cname]
-                if (force_y) {
+                if (force_yo) {
                     new_col = ifelse(!is.na(y_col), y_col, x_col)
                 } else {
                     new_col = ifelse(is.na(x_col) & !is.na(y_col), y_col, x_col)

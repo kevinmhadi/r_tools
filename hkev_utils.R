@@ -959,18 +959,25 @@ alt_lst = function(..., expr = NULL, FUN = NULL, do.c = FALSE) {
             expr = parse(text = expr)
         }
     }
-    obj = obj[which(!sapply(obj, is.null))]
+    ## obj = obj[which(!sapply(obj, is.null))]
+    is_null = sapply(obj, is.null) ## try this
     if (is.null(names(obj))) {
         nm = sapply(substitute(list(...))[-1], deparse)
         names(obj) = nm
     }
     if (is.null(FUN) & !is.null(expr)) {
         obj = lapply(obj, function(.OBJ) {
-            eval(expr)
-            return(.OBJ)
+            if (!is.null(.OBJ)) {
+                eval(expr)
+                return(.OBJ)
+            } else {
+                return(NULL)
+            }
         })
     } else if (!is.null(FUN)) {
-        obj = lapply(obj, FUN)
+        tmp_obj = lapply(obj[!is_null], FUN) ## try this
+        obj[!is_null] = tmp_obj
+        ## obj = lapply(obj, FUN)
     }
     if (do.c) {
         do.call("c", obj)
@@ -1035,7 +1042,7 @@ split_cigar = function(reads_grl, only_M = FALSE) {
     if (only_M) {
         tmp = tmp[na2false(tmp$type == "M")]
     }
-    
+
     tmp = split(tmp, tmp$qname, drop = TRUE)
     return(tmp)
 }
@@ -1110,6 +1117,76 @@ plot_tsne_grid = function(dat, dat_group, col = NA, param_grid = NULL, mc.cores 
     ## NULL
 }
 
+ggplot_tsne = function(rtsne_res = NULL, col = NA, group = NA, perp = NA, max_iter = NA, p = NULL) {
+    args_lst = grab_expl_args()
+    if (is.na(col)) {
+        if (!is.null(p$col)) {
+            if (all(!is.na(p$col)) & all(!is.na(p$group))) {
+                col = p$col
+                names(col) = as.character(p$group)
+                col = undup(col)
+            }
+        }
+    }
+    is.col = !is.na(col)
+    if (! is.null(rtsne_res)) {
+        if (is.null(p)) {
+            p = data.table(x = rtsne_res$Y[,1], y = rtsne_res$Y[,2], col = col, group = dat_group, perp = perp, max_iter = max_iter)
+            is.col = is.col | !is.na(unique(p$col))
+        }
+    } else if (is.null(rtsne_res) & is.null(p)) {
+        stop("please provide either rtsne_res or p")
+    }
+    gg = ggplot(p, aes(x = x, y = y, color = group)) + geom_point(size = 2.5) + xlab("tSNE 1") + ylab("tSNE 2") + ggtitle(sprintf("perp = %s\niter= %s", unique(p$perp), unique(p$iter))) + theme_bw(base_size = 25) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), plot.background = element_blank(), axis.line = element_line(colour = "black"))
+    if (all(!is.na(col))) {
+        
+        gg = gg + scale_color_manual(values = col)
+    }
+    return(gg)
+}
+
+grab_expl_args = function(deparse = TRUE) {
+    expr = expression(as.list(match.call(envir = parent.frame(2)))[-1])
+    expl_args = eval(expr, envir = parent.env(environment()))
+    if (deparse) {
+        return(lapply(expl_args, deparse))
+    } else {
+        return(expl_args)
+    }
+}
+
+
+grab_func_name = function(deparse = TRUE) {
+    expr = expression(as.list(match.call(envir = parent.frame(2)))[[1]])
+    func_name = eval(expr, envir = parent.env(environment()))
+    if (deparse) {
+        return(deparse(func_name))
+    } else {
+        return(func_name)
+    }
+}
+
+grab_all_args = function(deparse = TRUE) {
+    this_lst = as.list(args(grab_func_name()))
+    if (deparse) {
+        given_args = sapply(this_lst, deparse)
+        return(given_args)
+    } else {
+        return(this_lst)
+    }
+}
+
+no_arg = function(as.list = TRUE) {
+    these_args = grab_all_args()
+    return_this = these_args[nchar(these_args) == 0]
+    if (as.list) {
+        return(as.list(return_this))
+    } else {
+        return(return_this)
+    }
+}
+
+
 gsub_col = function(pattern, replacement, df) {
     ## for (i in 1:ncol(df)) {
     ##     this_colname = colnames(df)[i]
@@ -1179,4 +1256,47 @@ process_text = function(path, num_lines = 10000, extra_row = FALSE, row.names = 
         message(counter * num_lines, " lines processed")
         counter = counter + 1
     }
+}
+
+scale_tracks = function(gt_obj, fields = c("height", "ygap"), scaling) {
+    if (length(scaling) == 1) {
+        scaling = rep(scaling, length(fields))
+    }
+    for (i in 1:length(fields)) {
+        formatting(gt_obj)[, fields[i]] = formatting(gt_obj)[, fields[i]] * scaling[i]
+    }
+    return(gt_obj)
+}
+
+
+simple_hread = function(bampath) {
+    library(naturalsort)
+    cmd = sprintf('samtools view -H %s', bampath)
+    header = system(cmd, intern = TRUE)
+    this_header = read.table(text = header[2])
+    tmp = lapply(this_header, function(x) x[grep("^UR|^AS", x)])
+    tmp = setNames(sort(unlist(tmp)), NULL)
+    if (length(tmp) == 0) {
+        this_header = read.table(text = tail(header, 1))
+    } else {
+        return(tmp)
+    }
+    tmp = lapply(this_header, function(x) x[grep("LB", x)])
+    tmp = setNames(sort(unlist(tmp)), NULL)
+    ## tmp = as.data.frame(t(tmp))
+    return(tmp)
+}
+
+
+hmean = function(vec) {
+    return(1/((1/vec)/sum(vec)))
+}
+
+gmean = function(vec) {
+    return(prod(vec)^(1/length(vec)))
+}
+
+
+seevar = function(calling_env = parent.frame()) {
+    setdiff(ls(envir = calling_env), lsf.str(envir = calling_env))
 }
