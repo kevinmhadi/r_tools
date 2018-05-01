@@ -412,9 +412,13 @@ ret_ind = function(x, ix = 1)
 #' @param object tabled object
 #' @param nm names of the new columns
 #' @return colnamed object
-setColnames = function(object = nm, nm) {
-    colnames(object)  = nm
-    object
+setColnames = function(object = nm, nm = NULL, pattern = NULL, replacement = "") {
+    if (!is.null(nm)) {
+        colnames(object)  = nm
+    } else if (!is.null(pattern)) {
+        colnames(object) = gsub(pattern, replacement, colnames(object))
+    }
+    return(object)
 }
 
 #' convenience function to set row names
@@ -1139,15 +1143,17 @@ ggplot_tsne = function(rtsne_res = NULL, col = NA, group = NA, perp = NA, max_it
     }
     gg = ggplot(p, aes(x = x, y = y, color = group)) + geom_point(size = 2.5) + xlab("tSNE 1") + ylab("tSNE 2") + ggtitle(sprintf("perp = %s\niter= %s", unique(p$perp), unique(p$iter))) + theme_bw(base_size = 25) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), plot.background = element_blank(), axis.line = element_line(colour = "black"))
     if (all(!is.na(col))) {
-        
+
         gg = gg + scale_color_manual(values = col)
     }
     return(gg)
 }
 
-grab_expl_args = function(deparse = TRUE) {
+grab_expl_args = function(deparse = TRUE, calling_env = parent.frame()) {
     expr = expression(as.list(match.call(envir = parent.frame(2)))[-1])
-    expl_args = eval(expr, envir = parent.env(environment()))
+    ## expl_args = eval(expr, envir = parent.env(environment()))
+    ## expl_args = eval(expr, envir = calling_env)
+    expl_args = eval(expr, envir = calling_env)
     if (deparse) {
         return(lapply(expl_args, deparse))
     } else {
@@ -1156,9 +1162,11 @@ grab_expl_args = function(deparse = TRUE) {
 }
 
 
-grab_func_name = function(deparse = TRUE) {
+grab_func_name = function(deparse = TRUE, calling_env = parent.frame()) {
     expr = expression(as.list(match.call(envir = parent.frame(2)))[[1]])
-    func_name = eval(expr, envir = parent.env(environment()))
+    ## func_name = eval(expr, envir = parent.env(environment()))
+    ## func_name = eval(expr, envir = calling_env)
+    func_name = eval(expr, envir = calling_env)
     if (deparse) {
         return(deparse(func_name))
     } else {
@@ -1166,8 +1174,8 @@ grab_func_name = function(deparse = TRUE) {
     }
 }
 
-grab_all_args = function(deparse = TRUE) {
-    this_lst = as.list(args(grab_func_name()))
+grab_all_args = function(deparse = TRUE, calling_env = parent.frame()) {
+    this_lst = as.list(args(grab_func_name(calling_env = calling_env)))
     if (deparse) {
         given_args = sapply(this_lst, deparse)
         return(given_args)
@@ -1176,8 +1184,8 @@ grab_all_args = function(deparse = TRUE) {
     }
 }
 
-no_arg = function(as.list = TRUE) {
-    these_args = grab_all_args()
+no_arg = function(as.list = TRUE, calling_env = parent.frame()) {
+    these_args = grab_all_args(calling_env = calling_env)
     return_this = these_args[nchar(these_args) == 0]
     if (as.list) {
         return(as.list(return_this))
@@ -1200,11 +1208,97 @@ gsub_col = function(pattern, replacement, df) {
     for (i in 1:length(pattern)) {
         these_cols = colnames(df)
         new_cols = gsub(pattern[i], replacement[i], these_cols)
-        df = setnames(df, these_cols, new_cols)
+        if (length(new_cols) > 0) {
+            df = setnames(df, these_cols, new_cols)
+        } else {
+            df
+        }
     }
     return(df)
 }
 
+
+grl.expand = function(grl, expand_win) {
+    tmp_vals = mcols(grl)
+    tmp_gr = unlist(grl)
+    tmp_gr = tmp_gr + expand_win
+    new_grl = relist(tmp_gr, grl)
+    mcols(new_grl) = tmp_vals
+    return(new_grl)
+}
+
+grl.shrink = function(grl, shrink_win) {
+    tmp_vals = mcols(grl)
+    tmp_gr = unlist(grl)
+    tmp_gr = tmp_gr - shrink_win
+    new_grl = relist(tmp_gr, grl)
+    mcols(new_grl) = tmp_vals
+    return(new_grl)
+
+}
+
+grl.start = function(grl, width = 1, force = FALSE, ignore.strand = TRUE, clip = TRUE) {
+    tmp_vals = mcols(grl)
+    tmp_gr = unlist(grl)
+    tmp_gr = gr.start(tmp_gr, width, force, ignore.strand, clip)
+    new_grl = relist(tmp_gr, grl)
+    mcols(new_grl) = tmp_vals
+    return(new_grl)
+}
+
+grl.end = function(grl, width = 1, force = FALSE, ignore.strand = TRUE, clip = TRUE) {
+    tmp_vals = mcols(grl)
+    tmp_gr = unlist(grl)
+    tmp_gr = gr.end(tmp_gr, width, force, ignore.strand, clilp)
+    new_grl = relist(tmp_gr, grl)
+    mcols(new_grl) = tmp_vals
+    return(new_grl)
+}
+
+
+
+setMethod(`+`, 'GRangesList', function(e1, e2) {
+    return(grl.expand(e1, e2))
+})
+
+setMethod(`-`, 'GRangesList', function(e1, e2) {
+    return(grl.shrink(e1, e2))
+})
+
+
+grep_order = function(patterns, text, return_na = FALSE, first_only = FALSE) {
+    text_ix = 1:length(text)
+    match_lst = lapply(1:length(patterns), function(i) {
+        these_matches = regexpr(patterns[i], text)
+        position = which(these_matches != -1)
+        if (first_only) {
+            position = position[1]
+        }
+        if (length(position) > 0) {
+            return(text_ix[position])
+        } else if (return_na) {
+            return(NA)
+        }
+    })
+    return(unlist(match_lst))
+}
+
+grep_col_sort = function(patterns, df) {
+    is.data.table = FALSE
+    if (inherits(df, "data.table")) {
+        df = as.data.frame(df)
+        is.data.table = TRUE
+    }
+    new_col_order = grep_order(patterns, text = colnames(df), return_na = FALSE, first_only = FALSE)
+    other_cols = setdiff(1:ncol(df), new_col_order)
+    col_ix = c(other_cols, new_col_order)
+    df = df[, col_ix]
+    if (is.data.table) {
+        return(as.data.table(df))
+    } else {
+        return(df)
+    }
+}
 
 
 process_text = function(path, num_lines = 10000, extra_row = FALSE, row.names = NULL, expr = NULL, write.path = NULL) {
