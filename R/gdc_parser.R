@@ -1,5 +1,6 @@
 library(RCurl)
 library(jsonlite)
+library(XML)
 
 gdc_end = function(endpoint, legacy = FALSE, version = NULL) {
     if (!is.null(version)) {

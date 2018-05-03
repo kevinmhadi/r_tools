@@ -84,7 +84,8 @@ vplot = function(y, group = 'x', facet1 = NULL, facet2 = NULL, transpose = FALSE
     base_size = 11,
     blank_theme = TRUE,
     col = NULL,
-    flip_x = TRUE)
+    flip_x = TRUE,
+    drop = FALSE)
     {
         # require(ggplot2)
       if (!is.factor(group))
@@ -254,16 +255,16 @@ vplot = function(y, group = 'x', facet1 = NULL, facet2 = NULL, transpose = FALSE
                 if (!is.null(dat$facet2))
                     {
                         if (transpose)
-                            g = g + facet_grid(facet2 ~ facet1)
+                            g = g + facet_grid(facet2 ~ facet1, drop = drop)
                         else
-                            g = g + facet_grid(facet1 ~ facet2)
+                            g = g + facet_grid(facet1 ~ facet2, drop = drop)
                     }
                 else
                     {
                         if (transpose)
-                            g = g + facet_grid(. ~ facet1)
+                            g = g + facet_grid(. ~ facet1, drop = drop)
                         else
-                            g = g + facet_grid(facet1 ~ .)
+                            g = g + facet_grid(facet1 ~ ., drop = drop)
                     }
             }
         if (plotly)
@@ -1393,4 +1394,78 @@ gmean = function(vec) {
 
 seevar = function(calling_env = parent.frame()) {
     setdiff(ls(envir = calling_env), lsf.str(envir = calling_env))
+}
+
+
+seq_row = function(dat) {
+    seq(nrow(dat))
+}
+
+seq_col = function(dat) {
+    seq(ncol(dat))
+}
+
+
+
+
+
+#### dendrogram parsing
+
+tree_stats = function(dendro) {
+    tmp.env2345089712349876 = new.env(parent = globalenv())
+    tmp.env2345089712349876$lst = list()
+    tmp.env2345089712349876$lst2 = list()
+    tmp.env2345089712349876$i = 1
+    new_dend = dendrapply(dendro, function(n) {
+        ht = attr(n, "height")
+        mem = attr(n, "members")
+        is_leaf = is.leaf(n)
+        attr(n, "node_ix") = tmp.env2345089712349876$i
+        tmp.env2345089712349876$i = tmp.env2345089712349876$i + 1
+        num_branches = length(elementNROWS(n))
+        midpoint = attr(n, "midpoint")
+        if (is.null(midpoint)) {
+            midpoint = NA
+        }
+        value = attr(n, "value")
+        if (is.null(value)) {
+            value = NA
+        }
+        if (is_leaf) {
+            lb = labels(n)
+        } else {
+            lb = NA
+        }
+        tmp.env2345089712349876$lst = c(tmp.env2345089712349876$lst, list(data.frame(height = ht, members = mem, is_leaf = is_leaf, num_branches = num_branches, node_ix  = attr(n, "node_ix"), value = value, midpoint = midpoint, label = lb)))
+        return(n)
+    })
+    dendrapply(new_dend, function(n) {
+        parent_ix = attr(n, "node_ix")
+        child_ix = sapply(n, function(x) attr(x, "node_ix"))
+        if (!is.leaf(n)) {
+            tmp.env2345089712349876$lst2 = c(tmp.env2345089712349876$lst2, list(data.frame(parent_ix = parent_ix, child_ix = child_ix)))
+        }
+        return(NULL)
+    })
+    these_dt = rbindlist(tmp.env2345089712349876$lst)
+    p_c_tbl = rbindlist(tmp.env2345089712349876$lst2)
+    ## these_dt[, node_id := 1:.N]
+    these_dt = merge(these_dt, p_c_tbl, by.x = "node_ix", by.y = "parent_ix", all.x = TRUE)
+    rm(list = "tmp.env2345089712349876")
+    return(these_dt)
+    ## return(rbindlist(node_tbl))
+}
+
+
+cutoff_clusters = function(t_tbl) {
+    these_heights = sort(t_tbl[, unique(height)])
+    lst_of_clusters = lapply(these_heights, function(ht) {
+        num_clusters = t_tbl[height >= ht, length(unique(child_ix))]
+        return(setNames(ht, num_clusters))
+    })
+    num_clust = unlist(lst_of_clusters)
+    these_names = as.character(sort(as.integer(names(num_clust))))
+    num_clust = num_clust[these_names]
+    names(num_clust) = ceiling(as.integer(these_names) / 2)
+    return(num_clust)
 }

@@ -197,7 +197,7 @@ merge.repl = function(dt.x,
                 y_cname = paste0(this_col, ".y")
                 x_col = as.data.frame(dt.repl)[, x_cname]
                 y_col = as.data.frame(dt.repl)[, y_cname]
-                if (force_yo) {
+                if (force_y) {
                     new_col = ifelse(!is.na(y_col), y_col, x_col)
                 } else {
                     new_col = ifelse(is.na(x_col) & !is.na(y_col), y_col, x_col)
@@ -249,6 +249,22 @@ dt_na2false = function(dt) {
     }
     return(dt)
 }
+
+dt_na2zero = function(dt) {
+    these_cols = which(sapply(dt, class) %in% c("numeric", "integer"))
+    if (!inherits(dt, "data.table")) {
+        setDT(dt)
+    }
+    for (this_col in these_cols) {
+        this_val = as.data.frame(dt)[, this_col]
+        this_val[is.na(this_val)] = 0
+        set(dt, j = this_col, value = this_val)
+        ## dt[, this_col] = this_val
+    }
+    return(dt)
+}
+
+
 
 dt_na2empty = function(dt) {
     these_cols = which(sapply(dt, class) == "character")
