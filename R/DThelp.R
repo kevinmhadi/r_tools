@@ -19,12 +19,12 @@ v = function (expr) {
 
 
 
-d_evc = function(string_vec) {
-    .Internal(eval(dcq(string_vec), parent.frame(), parent.frame(2)))
+d_evc = function(string_vec, calling_env = parent.frame()) {
+    eval(dc(string_vec), envir = calling_env)
 }
 
-d_evl = function(string_vec) {
-    eval(dcl(string_vec), parent.frame(4))
+d_evl = function(string_vec, calling_env = parent.frame()) {
+    eval(dl(string_vec), envir = calling_env)
 }
 
 
@@ -236,7 +236,7 @@ lg2int = function(dt) {
     these_cols = which(sapply(dt, class) == "logical")
     for (this_col in these_cols) {
         this_val = as.data.frame(dt[, this_col, with = FALSE])[,1]
-        set(dt, j = this_col, value = as.integer(this_val))
+        data.table::set(dt, j = this_col, value = as.integer(this_val))
     }
     return(dt)
 }
@@ -245,7 +245,7 @@ dt_na2false = function(dt) {
     these_cols = which(sapply(dt, class) == "logical")
     for (this_col in these_cols) {
         this_val = as.data.frame(dt[, this_col, with = FALSE])[,1]
-        set(dt, j = this_col, value = na2false(this_val))
+        data.table::set(dt, j = this_col, value = na2false(this_val))
     }
     return(dt)
 }
@@ -258,7 +258,7 @@ dt_na2zero = function(dt) {
     for (this_col in these_cols) {
         this_val = as.data.frame(dt)[, this_col]
         this_val[is.na(this_val)] = 0
-        set(dt, j = this_col, value = this_val)
+        data.table::set(dt, j = this_col, value = this_val)
         ## dt[, this_col] = this_val
     }
     return(dt)
@@ -270,14 +270,14 @@ dt_na2empty = function(dt) {
     these_cols = which(sapply(dt, class) == "character")
     for (this_col in these_cols) {
         this_val = as.data.frame(dt[, this_col, with = FALSE])[,1]
-        set(dt, j = this_col, value = na2empty(this_val))
+        data.table::set(dt, j = this_col, value = na2empty(this_val))
     }
     return(dt)
 }
 
 dt_setnull = function(dt, cols) {
     for (this_col in cols) {
-        set(dt, j = this_col, value = NULL)
+        data.table::set(dt, j = this_col, value = NULL)
     }
     return(dt)
 }

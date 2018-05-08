@@ -73,207 +73,214 @@ vplot2 = function(dat,
 
 vplot = function(y, group = 'x', facet1 = NULL, facet2 = NULL, transpose = FALSE, flip = FALSE,  mapping = NULL,
                  stat = "ydensity",
-    position = "dodge",
-    trim = TRUE, sample = NA, scale = "width", log = FALSE, count = TRUE, xlab = NULL, ylim = NULL, ylab = NULL, minsup = NA,
-    scatter = FALSE,
-    text = NULL,
-    reorder = FALSE,
-    reorder.fun = mean,
-    cex.scatter = 1,
-    col.scatter = NULL, alpha = 0.3, title = NULL, legend.ncol = NULL, legend.nrow = NULL, vfilter = TRUE, vplot = TRUE, dot = FALSE, stackratio = 1, binwidth = 0.1, plotly = FALSE, print = TRUE,
-    base_size = 11,
-    blank_theme = TRUE,
-    col = NULL,
-    flip_x = TRUE,
-    drop = FALSE)
-    {
-        # require(ggplot2)
-      if (!is.factor(group))
-          group = as.factor(group)
-      dat = data.table(y = suppressWarnings(as.numeric(y)), group)
+                 position = "dodge",
+                 trim = TRUE, sample = NA, scale = "width", log = FALSE, count = TRUE, xlab = NULL, ylim = NULL, ylab = NULL, minsup = NA,
+                 scatter = FALSE,
+                 text = NULL,
+                 reorder = FALSE,
+                 reorder.fun = mean,
+                 cex.scatter = 1,
+                 col.scatter = NULL, alpha = 0.3, title = NULL, legend.ncol = NULL, legend.nrow = NULL, vfilter = TRUE, vplot = TRUE, dot = FALSE, stackratio = 1, binwidth = 0.1, plotly = FALSE, print = TRUE,
+                 base_size = 11,
+                 blank_theme = TRUE,
+                 col = NULL,
+                 flip_x = TRUE,
+                 drop = FALSE,
+                 facet_scales = c("fixed", "free_y", "free_x", "free"))
+{
+                                        # require(ggplot2)
+    if (!is.factor(group))
+        group = as.factor(group)
+    dat = data.table(y = suppressWarnings(as.numeric(y)), group)
 
-      if (reorder)
-      {
+    if (reorder)
+    {
         newlev = dat[, reorder.fun(y, na.rm = TRUE), by = group][order(V1), group]
         dat[, group := factor(group, levels = newlev)]
-      }
+    }
 
-      if (!is.na(sample))
+    if (!is.na(sample))
         if (sample>0)
         {
-          if (sample<1)
-            dat = dat[sample(nrow(dat), round(sample*nrow(sample))), ]
-          else
-            dat = dat[sample(nrow(dat), round(sample)), ]
+            if (sample<1)
+                dat = dat[sample(nrow(dat), round(sample*nrow(sample))), ]
+            else
+                dat = dat[sample(nrow(dat), round(sample)), ]
         }
 
-        if (is.null(facet1))
-            {
-                facet1 = facet2
-                facet2 = NULL
-            }
+    if (is.null(facet1))
+    {
+        facet1 = facet2
+        facet2 = NULL
+    }
 
-        if (!is.null(facet1))
-            if (!is.factor(facet1))
-                facet1 = factor(facet1, unique(facet1))
+    if (!is.null(facet1))
+        if (!is.factor(facet1))
+            facet1 = factor(facet1, unique(facet1))
 
 
-        if (!is.null(facet2))
-            if (!is.factor(facet2))
-                facet2 = factor(facet2, unique(facet2))
+    if (!is.null(facet2))
+        if (!is.factor(facet2))
+            facet2 = factor(facet2, unique(facet2))
 
-      suppressWarnings(dat[, facet1 := facet1])
-      suppressWarnings(dat[, facet2 := facet2])
+    suppressWarnings(dat[, facet1 := facet1])
+    suppressWarnings(dat[, facet2 := facet2])
 
-      dat = dat[rowSums(is.na(dat))==0, ]
+    dat = dat[rowSums(is.na(dat))==0, ]
 
-            ## remove 0 variance groups
-        dat$vgroup = paste(dat$group, dat$facet1, dat$facet2)
+    ## remove 0 variance groups
+    dat$vgroup = paste(dat$group, dat$facet1, dat$facet2)
 
-        ## if (vfilter)
-        ##     {
-        vgroup = NULL ## NOTE fix
-        good = as.data.table(dat)[, list(var = var(y)), keyby = vgroup][var>0, vgroup]
-        dat = dat[, vfilter := dat$vgroup %in% as.character(good)]
-        ## }
+    ## if (vfilter)
+    ##     {
+    vgroup = NULL ## NOTE fix
+    good = as.data.table(dat)[, list(var = var(y)), keyby = vgroup][var>0, vgroup]
+    dat = dat[, vfilter := dat$vgroup %in% as.character(good)]
+    ## }
 
-        if (!is.na(minsup))
-            {
-                num = NULL ## NOTE fix
-                good = as.data.table(dat)[, list(num = length(y)), keyby = vgroup][num>minsup, vgroup]
-                dat = dat[(dat$vgroup %in% as.character(good)), ]
-            }
+    if (!is.na(minsup))
+    {
+        num = NULL ## NOTE fix
+        good = as.data.table(dat)[, list(num = length(y)), keyby = vgroup][num>minsup, vgroup]
+        dat = dat[(dat$vgroup %in% as.character(good)), ]
+    }
 
-        if (nrow(dat)==0)
-            stop('No groups exist with >0 variance')
+    if (nrow(dat)==0)
+        stop('No groups exist with >0 variance')
 
-        if (count)
-            {
-                tmp = table(dat$group)
-                ix = match(levels(dat$group), names(tmp))
-                levels(dat$group) = paste(names(tmp)[ix], '\n(', tmp[ix], ')', sep = '')
-            }
+    if (count)
+    {
+        tmp = table(dat$group)
+        ix = match(levels(dat$group), names(tmp))
+        levels(dat$group) = paste(names(tmp)[ix], '\n(', tmp[ix], ')', sep = '')
+    }
 
-        if (is.null(mapping))
-            mapping = aes(fill=group)
+    if (is.null(mapping))
+        mapping = aes(fill=group)
 
-        if (!is.null(col)) {
-            dat[, col := col]
+    if (!is.null(col)) {
+        dat[, col := col]
+    }
+    ## g = ggplot(dat[vfilter!=0, ], aes(y = y, x = group, group = group))
+    g = ggplot(dat, aes(y = y, x = group, group = group))
+    g = g + theme_bw(base_size = base_size)
+    if (blank_theme) {
+        if (flip_x) {
+            g = g + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), plot.background = element_blank(), axis.line = element_line(colour = "black"), axis.text.x  = element_text(angle = 90, vjust = .5))
+        } else {
+            g = g + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), plot.background = element_blank(), axis.line = element_line(colour = "black"))
         }
-        ## g = ggplot(dat[vfilter!=0, ], aes(y = y, x = group, group = group))
-        g = ggplot(dat, aes(y = y, x = group, group = group))
-        g = g + theme_bw(base_size = base_size)
-        if (blank_theme) {
-            if (flip_x) {
-                g = g + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), plot.background = element_blank(), axis.line = element_line(colour = "black"), axis.text.x  = element_text(angle = 90, vjust = .5))
-            } else {
-                g = g + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), plot.background = element_blank(), axis.line = element_line(colour = "black"))
-            }
-        }
+    }
 
-        if (vplot)
-            g = g + geom_violin(mapping = mapping, stat = stat, position = position, trim = trim, scale = scale)
+    if (vplot)
+        g = g + geom_violin(mapping = mapping, stat = stat, position = position, trim = trim, scale = scale)
 
-        if (scatter)
+    if (scatter) {
+        if (dot)
         {
-                if (dot)
-                    {
-                        if (is.null(text))
-                            g = g + geom_dotplot(data = dat, mapping = aes(x = group, y = y, fill = group), binaxis = 'y', position = 'identity', col = NA, alpha = alpha, method = 'dotdensity', dotsize = cex.scatter, stackratio = stackratio, binwidth = binwidth, stackdir = 'center')
-                        else
-                            g = g + geom_dotplot(data = dat, mapping = aes(x = group, y = y, fill = group, text = text), binaxis = 'y', position = 'identity', col = NA, alpha = alpha, method = 'dotdensity', dotsize = cex.scatter, stackratio = stackratio, binwidth = binwidth, stackdir = 'center')
-                    }
-                else
-                    {
-                        if (is.null(text))
-                            {
-                                if (is.null(col.scatter)) {
-                                    g = g + geom_jitter(data = dat, mapping = aes(fill = group), shape = 21, size = cex.scatter, alpha = alpha, position = position_jitter(height = 0))
-                                    ## g = g + geom_jitter(data = dat, shape = 21, size = cex.scatter, alpha = alpha, position = position_jitter(height = 0))
-                                }
-                                else
-                                    g = g + geom_jitter(data = dat, fill = alpha(col.scatter, alpha), shape = 21, position = position_jitter(height = 0))
-
-                            }
-                        else
-                            {
-                                if (is.null(col.scatter)) {
-                                    g = g + geom_jitter(data = dat, mapping = aes(fill = group, text = text), shape = 21, size = cex.scatter, alpha = alpha, position = position_jitter(height = 0))
-                                }
-                                else
-                                    g = g + geom_jitter(data = dat, mapping = aes(text = text), fill = alpha(col.scatter, alpha), shape = 21, position = position_jitter(height = 0))
-                            }
-                    }
-
-            }
-
-
-
-        if (log)
-            {
-                if (!is.null(ylim))
-                    if (length(ylim)!=2)
-                        ylim = NULL
-
-                if (is.null(ylim))
-                    g = g + scale_y_log10()
-#                    g = g + coord_trans(y = 'log10')
-                else
-                    g = g+ scale_y_log10(limits = ylim)
-#                    g = g + coord_trans(y = 'log10', limits = ylim)
-            }
+            if (is.null(text))
+                g = g + geom_dotplot(data = dat, mapping = aes(x = group, y = y, fill = group), binaxis = 'y', position = 'identity', col = NA, alpha = alpha, method = 'dotdensity', dotsize = cex.scatter, stackratio = stackratio, binwidth = binwidth, stackdir = 'center')
+            else
+                g = g + geom_dotplot(data = dat, mapping = aes(x = group, y = y, fill = group, text = text), binaxis = 'y', position = 'identity', col = NA, alpha = alpha, method = 'dotdensity', dotsize = cex.scatter, stackratio = stackratio, binwidth = binwidth, stackdir = 'center')
+        }
         else
+        {
+            if (is.null(text))
             {
-                if (!is.null(ylim))
-                    if (length(ylim)==1)
-                        g = g+ ylim(ylim[1])
-                    else if (length(ylim)==2)
-                        g = g+ ylim(ylim[1], ylim[2])
+                if (is.null(col.scatter)) {
+                    g = g + geom_jitter(data = dat, mapping = aes(fill = group), shape = 21, size = cex.scatter, alpha = alpha, position = position_jitter(height = 0))
+                    ## g = g + geom_jitter(data = dat, shape = 21, size = cex.scatter, alpha = alpha, position = position_jitter(height = 0))
+                }
+                else
+                    g = g + geom_jitter(data = dat, fill = alpha(col.scatter, alpha), shape = 21, position = position_jitter(height = 0))
+
             }
+            else
+            {
+                if (is.null(col.scatter)) {
+                    g = g + geom_jitter(data = dat, mapping = aes(fill = group, text = text), shape = 21, size = cex.scatter, alpha = alpha, position = position_jitter(height = 0))
+                }
+                else
+                    g = g + geom_jitter(data = dat, mapping = aes(text = text), fill = alpha(col.scatter, alpha), shape = 21, position = position_jitter(height = 0))
+            }
+        }
 
-        if (!is.null(xlab))
-            g = g+ xlab(xlab)
-
-        if (!is.null(ylab))
-            g = g+ ylab(ylab)
-
-        if (!is.null(title))
-            g = g + ggtitle(title)
-
-        if (!is.null(legend.ncol))
-            g = g + guides(fill = guide_legend(ncol = legend.ncol, byrow = TRUE))
-
-        if (!is.null(legend.nrow))
-            g = g + guides(fill = guide_legend(nrow = legend.nrow, byrow = TRUE))
+    }
 
 
-      if (flip)
+
+    if (log)
+    {
+        if (!is.null(ylim))
+            if (length(ylim)!=2)
+                ylim = NULL
+
+        if (is.null(ylim))
+            g = g + scale_y_log10()
+                                        #                    g = g + coord_trans(y = 'log10')
+        else
+            g = g+ scale_y_log10(limits = ylim)
+                                        #                    g = g + coord_trans(y = 'log10', limits = ylim)
+    }
+    else
+    {
+        if (!is.null(ylim))
+            if (length(ylim)==1)
+                g = g+ ylim(ylim[1])
+            else if (length(ylim)==2)
+                g = g+ ylim(ylim[1], ylim[2])
+    }
+
+    if (!is.null(xlab))
+        g = g+ xlab(xlab)
+
+    if (!is.null(ylab))
+        g = g+ ylab(ylab)
+
+    if (!is.null(title))
+        g = g + ggtitle(title)
+
+    if (!is.null(legend.ncol))
+        g = g + guides(fill = guide_legend(ncol = legend.ncol, byrow = TRUE))
+
+    if (!is.null(legend.nrow))
+        g = g + guides(fill = guide_legend(nrow = legend.nrow, byrow = TRUE))
+
+
+    if (flip)
         g = g + coord_flip()
 
-        if (!is.null(dat$facet1))
-            {
-                if (!is.null(dat$facet2))
-                    {
-                        if (transpose)
-                            g = g + facet_grid(facet2 ~ facet1, drop = drop)
-                        else
-                            g = g + facet_grid(facet1 ~ facet2, drop = drop)
-                    }
-                else
-                    {
-                        if (transpose)
-                            g = g + facet_grid(. ~ facet1, drop = drop)
-                        else
-                            g = g + facet_grid(facet1 ~ ., drop = drop)
-                    }
+    if (!is.null(dat$facet1)) {
+        if (length(facet_scales) > 1) {
+            message("length > 1 arg provided to facet_scales\ndefaulting to facet_scales[1]")
+            facet_scales = facet_scales[facet_scales %in% c("fixed", "free_y", "free_x", "free")][1]
+            if (length(facet_scales) == 0) {
+                stop("facet_scales argument incorrect, must be one of\n", c("fixed", "free_y", "free_x", "free"))
             }
-        if (plotly)
-            return(ggplotly(g))
+        }
+        if (!is.null(dat$facet2)) {
+            if (transpose) {
+                g = g + facet_grid(facet2 ~ facet1, drop = drop, scales = facet_scales)
+            } else {
+                g = g + facet_grid(facet1 ~ facet2, drop = drop, scales = facet_scales)
+            }
+        } else {
+            if (transpose) {
+                g = g + facet_grid(. ~ facet1, drop = drop, scales = facet_scales)
+            } else {
+                g = g + facet_grid(facet1 ~ ., drop = drop, scales = facet_scales)
+            }
+        }
+    }
 
-        if (print)
-            print(g)
-        else
-            g
+
+    if (plotly)
+        return(ggplotly(g))
+
+    if (print)
+        print(g)
+    else
+        g
 }
 
 
@@ -1122,6 +1129,25 @@ plot_tsne_grid = function(dat, dat_group, col = NA, param_grid = NULL, mc.cores 
     ## NULL
 }
 
+
+## gg plotting
+gg_mytheme = function(gg, base_size = 16, legend.position = "none") {
+    gg = gg + theme_bw(base_size = base_size) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), plot.background = element_blank(), axis.line = element_line(colour = "black"), axis.text.x  = element_text(angle = 90, vjust = .5), legend.position = legend.position)
+    return(gg)
+}
+
+gg_axes = function(gg, ylim = NULL, xlim = NULL) {
+    if (!is.null(ylim)) {
+        gg = gg + ylim(ylim)
+    }
+    if (!is.null(xlim)) {
+        gg = gg + xlim(xlim)
+    }
+    return(gg)
+}
+
+
+
 ggplot_tsne = function(rtsne_res = NULL, col = NA, group = NA, perp = NA, max_iter = NA, p = NULL) {
     args_lst = grab_expl_args()
     if (is.na(col)) {
@@ -1144,11 +1170,72 @@ ggplot_tsne = function(rtsne_res = NULL, col = NA, group = NA, perp = NA, max_it
     }
     gg = ggplot(p, aes(x = x, y = y, color = group)) + geom_point(size = 2.5) + xlab("tSNE 1") + ylab("tSNE 2") + ggtitle(sprintf("perp = %s\niter= %s", unique(p$perp), unique(p$iter))) + theme_bw(base_size = 25) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), plot.background = element_blank(), axis.line = element_line(colour = "black"))
     if (all(!is.na(col))) {
-
         gg = gg + scale_color_manual(values = col)
     }
     return(gg)
 }
+
+
+ggplot_mybar = function(y, col = NA, group = NA, fill_by = NA, facet1 = NULL, facet2 = NULL, transpose = FALSE, base_size = 16, xlab = NULL, ylab = NULL, ggtitle = NULL, legend.position = "none", print = FALSE) {
+    library(forcats)
+    dat = data.frame(id_col = 1:length(y), y = y, group = group, col = col, fill_by = fill_by)
+    if (!is.na(col)) {
+        if (length(col) != length(group) | length(col) != length(unique(group))) {
+            stop("col must have 1 to 1 correspondence to unique levels within group\nor must be a length(group) vector of colors")
+        }
+        names(col) = as.character(p$group)
+        col = undup(col)
+    }
+    dat[, "facet1"] = facet1
+    dat[, "facet2"] = facet2
+    if (!is.na(fill_by)) {
+        dat[, "fill_by"] = fill_by
+    } else {
+        dat[, "fill_by"] = dat[['group']]
+    }
+    gg = ggplot(dat, mapping = aes(x = group, y = y, fill = fct_explicit_na(fill_by))) + geom_bar(stat = "identity")
+    if (!is.null(dat[["facet1"]]) | !is.null(dat[["facet2"]])) {
+        if (is.null(dat[["facet2"]])) {
+            if (!transpose) {
+                gg = gg + facet_grid(facet1 ~ ., drop = FALSE)
+            } else {
+                gg = gg + facet_grid(. ~ facet1, drop = FALSE)
+            }
+        } else if (is.null(dat[["facet1"]])) {
+            if (!transpose) {
+                gg = gg + facet_grid(facet2 ~ ., drop = FALSE)
+            } else {
+                gg = gg + facet_grid(. ~ facet1, drop = FALSE)
+            }
+        } else {
+            if (!transpose) {
+                gg = gg + facet_grid(facet1 ~ facet2, drop = FALSE)
+            } else {
+                gg = gg + facet_grid(facet2 ~ facet1, drop = FALSE)
+            }
+        }
+    }
+    if (!is.null(xlab)) {
+        gg = gg + xlab(xlab)
+    }
+    if (!is.null(ylab)) {
+        gg = gg + ylab(ylab)
+    }
+    if (!is.null(ggtitle)) {
+        gg = gg + ggtitle(label = ggtitle)
+    }
+    if (!is.na(col)) {
+        gg = gg + scale_color_manual(values = col)
+    }
+    gg = gg_mytheme(gg, base_size = base_size, legend.position = legend.position)
+    if (print) {
+        return(print(gg))
+    } else {
+        return(gg)
+    }
+}
+
+
 
 grab_expl_args = function(deparse = TRUE, calling_env = parent.frame()) {
     expr = expression(as.list(match.call(envir = parent.frame(2)))[-1])
@@ -1210,7 +1297,8 @@ gsub_col = function(pattern, replacement, df) {
         these_cols = colnames(df)
         new_cols = gsub(pattern[i], replacement[i], these_cols)
         if (length(new_cols) > 0) {
-            df = setnames(df, these_cols, new_cols)
+            colnames(df) = new_cols
+            ## df = setnames(df, these_cols, new_cols)
         } else {
             df
         }
@@ -1284,15 +1372,19 @@ grep_order = function(patterns, text, return_na = FALSE, first_only = FALSE) {
     return(unlist(match_lst))
 }
 
-grep_col_sort = function(patterns, df) {
+grep_col_sort = function(patterns, df, all_cols = TRUE) {
     is.data.table = FALSE
     if (inherits(df, "data.table")) {
         df = as.data.frame(df)
         is.data.table = TRUE
     }
     new_col_order = grep_order(patterns, text = colnames(df), return_na = FALSE, first_only = FALSE)
-    other_cols = setdiff(1:ncol(df), new_col_order)
-    col_ix = c(other_cols, new_col_order)
+    if (all_cols) {
+        other_cols = setdiff(1:ncol(df), new_col_order)
+        col_ix = c(other_cols, new_col_order)
+    } else {
+        col_ix = new_col_order
+    }
     df = df[, col_ix]
     if (is.data.table) {
         return(as.data.table(df))
@@ -1384,7 +1476,7 @@ simple_hread = function(bampath) {
 
 
 hmean = function(vec) {
-    return(1/((1/vec)/sum(vec)))
+    return(1/(sum(1/vec)/length(vec)))
 }
 
 gmean = function(vec) {
@@ -1468,4 +1560,40 @@ cutoff_clusters = function(t_tbl) {
     num_clust = num_clust[these_names]
     names(num_clust) = ceiling(as.integer(these_names) / 2)
     return(num_clust)
+}
+
+
+## helper function for lapply
+seq_which = function(expression) {
+    if (inherits(expression, "logical")) {
+        return(which(expression))
+    } else {
+        return(seq_along(expression))
+    }
+}
+
+
+## rcplex implementation of nnls()
+## based on Marcin's signatures solver
+rcplex_nnls = function(A, b) {
+    orig_A = A
+    varnames = c(paste('Col', 1:ncol(A),  sep = "_"),
+                 paste0('eps', 1:nrow(A)))
+    A = cbind(A, diag(rep(1, nrow(A))))
+    colnames(A) = varnames
+    sense = 'E'
+    lb = rep(-Inf, ncol(A))
+    lb[1:ncol(orig_A)] = 0
+    ub = rep(Inf, ncol(A))
+    Q = diag(c(rep(0, ncol(orig_A)), rep(1, nrow(orig_A)))) ## sum of squares of just epsilons
+    sol = Rcplex::Rcplex(cvec = rep(0, length(varnames)), Amat = A, bvec = as.numeric(b), sense = sense, Qmat = Q, lb = lb, ub = ub, objsense = "min", vtype = rep("C", length(varnames)))
+    if (!is.null(colnames(orig_A))) {
+        col_nm = colnames(orig_A)
+    } else {
+        col_nm = as.character(1:ncol(orig_A))
+    }
+    solution_df = data.frame(column_name = col_nm, coefficients = round(sol$xopt[1:ncol(orig_A)]))
+    sum_residuals = round(sum(sol$xopt[-(1:ncol(orig_A))]))
+    solution_df = rbind(solution_df, data.table(column_name = "Residual", coefficients = sum_residuals))
+    return(solution_df)
 }
