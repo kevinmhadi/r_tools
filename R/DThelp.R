@@ -281,3 +281,24 @@ dt_setnull = function(dt, cols) {
     }
     return(dt)
 }
+
+
+dt_setint = function(dt, cols = NULL) {
+    if (is.null(cols)) {
+        cols = names(dt)[which(sapply(dt, class) %in% c("numeric"))]
+    }
+    for (this_col in cols) {
+        data.table::set(dt, j = this_col, value = as.integer(dt[[this_col]]))
+    }
+    return(dt)
+}
+
+dt_setchar = function(dt, cols = NULL) {
+    if (is.null(cols)) {
+        cols = names(dt)[which(!sapply(dt, class) == "character")]
+    }
+    for (this_col in cols) {
+        data.table::set(dt, j = this_col, value = as.character(dt[[this_col]]))
+    }
+    return(dt)
+}

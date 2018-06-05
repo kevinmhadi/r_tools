@@ -1131,8 +1131,13 @@ plot_tsne_grid = function(dat, dat_group, col = NA, param_grid = NULL, mc.cores 
 
 
 ## gg plotting
-gg_mytheme = function(gg, base_size = 16, legend.position = "none") {
-    gg = gg + theme_bw(base_size = base_size) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), plot.background = element_blank(), axis.line = element_line(colour = "black"), axis.text.x  = element_text(angle = 90, vjust = .5), legend.position = legend.position)
+gg_mytheme = function(gg, base_size = 16, legend.position = "none", flip_x = TRUE, x_axis_cex = 1, y_axis_cex = 1, ylab_cex = 1, xlab_cex = 1, title_cex = 1) {
+    ## gg = gg + theme_bw(base_size = base_size) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), plot.background = element_blank(), axis.line = element_line(colour = "black"), axis.text.x  = element_text(angle = 90, vjust = .5), legend.position = legend.position)
+    if (flip_x) {
+        gg = gg + theme_bw(base_size = base_size) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), plot.background = element_blank(), axis.line = element_line(colour = "black"), axis.text.x  = element_text(angle = 90, vjust = .5, size = rel(x_axis_cex)), legend.position = legend.position, axis.text.y = element_text(size = rel(y_axis_cex)), plot.title = element_text(size = rel(title_cex)), axis.title.x = element_text(size = rel(xlab_cex)), axis.title.y = element_text(size = rel(ylab_cex)))
+    } else {
+        gg = gg + theme_bw(base_size = base_size) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), plot.background = element_blank(), axis.line = element_line(colour = "black"), legend.position = legend.position, axis.text.x = element_text(size = rel(x_axis_cex)), axis.text.y = element_text(size = rel(y_axis_cex)), plot.title = element_text(size = rel(title_cex)), axis.title.x = element_text(size = rel(xlab_cex)), axis.title.y = element_text(size = rel(ylab_cex)))
+    }
     return(gg)
 }
 
@@ -1345,6 +1350,25 @@ grl.end = function(grl, width = 1, force = FALSE, ignore.strand = TRUE, clip = T
 }
 
 
+gr.strand = function(gr, str = "*") {
+    strand(gr) = str
+    return(gr)
+}
+
+gr.width = function(gr, w = width(gr)) {
+    width(gr) = w
+    return(gr)
+}
+
+grl.width = function(grl, w = width(grl)) {
+    tmp_vals = mcols(grl)
+    tmp_gr = unlist(grl)
+    gr.width(tmp_gr) = w
+    new_grl = relist(tmp_gr, grl)
+    mcols(new_grl) = tmp_vals
+    return(new_grl)
+}
+
 
 setMethod(`+`, 'GRangesList', function(e1, e2) {
     return(grl.expand(e1, e2))
@@ -1355,6 +1379,7 @@ setMethod(`-`, 'GRangesList', function(e1, e2) {
 })
 
 
+###############################################################
 grep_order = function(patterns, text, return_na = FALSE, first_only = FALSE) {
     text_ix = 1:length(text)
     match_lst = lapply(1:length(patterns), function(i) {
@@ -1454,6 +1479,44 @@ scale_tracks = function(gt_obj, fields = c("height", "ygap"), scaling) {
     }
     return(gt_obj)
 }
+
+evens = function(vec) {
+    index = 1:length(vec)
+    vec[index[index %% 2 == 0]]
+}
+
+odds = function(vec) {
+    index = 1:length(vec)
+    vec[index[index %% 2 == 1]]
+}
+
+junc_kataegis = function(junc) {
+    if (inherits(junc, "GRangesList")) {
+        junc = grl.unlist(junc)
+    }
+    these_bp = gr2dt(sort(sortSeqlevels(junc), ignore.strand = TRUE))
+    bp_dist = these_bp[,{
+        .SD
+        odd_start = copy(.SD)[odds(1:.N), start]
+        odd_dist = c(odd_start[-1]) - c(odd_start[-length(odd_start)])
+        even_start = copy(.SD)[evens(1:.N), start]
+        if (.N %% 2 == 0) {
+            even_dist = c(odd_start[-1], NA) - c(even_start[-length(even_start)], NA)
+            return_this = c(intercalate(odd_dist, even_dist), NA)
+        } else if (.N %% 2 == 1) {
+            even_dist = c(odd_start[-1]) - c(even_start)
+            return_this = c(intercalate(odd_dist, even_dist), NA)
+        }
+        ## print(return_this); print(length(return_this) == .N)
+        return_this
+    }, by = seqnames]
+    these_bp[, bp_dist := bp_dist$V1]
+    these_bp[, log_10_bdist := log10(bp_dist)]
+    gr_bp = dt2gr(these_bp)
+    return(gr_bp)
+}
+
+
 
 
 simple_hread = function(bampath) {
@@ -1596,4 +1659,415 @@ rcplex_nnls = function(A, b) {
     sum_residuals = round(sum(sol$xopt[-(1:ncol(orig_A))]))
     solution_df = rbind(solution_df, data.table(column_name = "Residual", coefficients = sum_residuals))
     return(solution_df)
+}
+
+
+.wclass = function(w, param = c(0, 100, 1e3, 1e4, 1e5, 1e6, 1e7, Inf)) as.character(cut(w, param))
+.walks2juncs = function(walks)
+{
+  if (length(walks)==0)
+    return(NULL)
+  ix = which(values(walks)$str == '+' & elementNROWS(walks)>1)
+  wkdt = as.data.table(walks[ix, ])
+  juncs = NULL
+  if (nrow(wkdt)>0)
+    {
+      juncdt = wkdt[, .(
+        seg1 = gr.string(GRanges(seqnames[-.N], IRanges(start[-.N], end[-.N]), strand = strand[-.N])),
+        b1 = gr.string(gr.flipstrand(gr.end(GRanges(seqnames[-.N], IRanges(start[-.N], end[-.N]), strand = strand[-.N]), 1, ignore.strand = FALSE))),
+        b2 = gr.string(gr.start(GRanges(seqnames[-1], IRanges(start[-1], end[-1]), strand = strand[-1]), 1, ignore.strand = FALSE)),
+        seg2 = gr.string(GRanges(seqnames[-1], IRanges(start[-1], end[-1]), strand = strand[-1]))),
+        by = group]
+      juncs = grl.pivot(GRangesList(parse.gr(juncdt$b1), parse.gr(juncdt$b2)))
+      values(juncs) = as.data.frame(juncdt[, .(b1, b2, seg1, seg2, walk = ix[group])])
+    }
+  return(juncs)
+}
+
+make_token_tbl = function(gwalk_path, jabba_path, j_class_path = NA, id = NULL, outdir, with_cn = TRUE) {
+    library(copynumber)
+    source('/gpfs/commons/home/khadi/modules/RA_ClustClassify/utility.R')
+    class_levels = c("Clust_del_1_to_10kb","Clust_del_10_to_100kb","Clust_del_100kb_to_1Mb","Clust_del_1Mb_to_10Mb","Clust_del_gr_10Mb","Clust_tds_1_to_10kb","Clust_tds_10_to_100kb","Clust_tds_100kb_to_1Mb","Clust_tds_1Mb_to_10Mb","Clust_tds_gr_10Mb","Clust_inv_1_to_10kb","Clust_inv_10_to_100kb","Clust_inv_100kb_to_1Mb","Clust_inv_1Mb_to_10Mb","Clust_inv_gr_10Mb","Clust_trans","Nonclust_del_1_to_10kb","Nonclust_del_10_to_100kb","Nonclust_del_100kb_to_1Mb","Nonclust_del_1Mb_to_10Mb","Nonclust_del_gr_10Mb","Nonclust_tds_1_to_10kb","Nonclust_tds_10_to_100kb","Nonclust_tds_100kb_to_1Mb","Nonclust_tds_1Mb_to_10Mb","Nonclust_tds_gr_10Mb","Nonclust_inv_1_to_10kb","Nonclust_inv_10_to_100kb","Nonclust_inv_100kb_to_1Mb","Nonclust_inv_1Mb_to_10Mb","Nonclust_inv_gr_10Mb","Nonclust_trans")
+    arg_lengths = length(gwalk_path) == length(jabba_path)
+    if (!arg_lengths) {
+        stop("not every gwalk has a corresponding jabba path")
+    }
+    if (is.null(id)) {
+        id = 1:length(gwalk_path)
+    } else {
+        if (length(id) != length(gwalk_path)) {
+            stop("ids must have one to one correspondence to gwalk_path and jabba_path")
+        }
+    }
+    out_tbl = mcMap(function(gp, jp, jclassp, this_id) {
+        tryCatch({
+            message('Starting ', this_id)
+            ## jab = readRDS(pairs[this.pair,]$jabba_rds)
+            jab = readRDS(jp)
+            junctions = jab$junctions
+            if (any(unlist(width(junctions) != 2))) {
+                ## width(junctions) = endoapply(width(junctions), function(x) as.integer(ifelse(x != 2, 2, x)))
+                junctions = grl.start(junctions, width = 2, force = TRUE, clip = FALSE)
+                ## junctions = endoapply(junctions, function(x) x + 1)
+            }
+            wann = NULL
+            if (any(values(jab$junctions)$cn>0))
+            {
+                ## walks = muffle(readRDS(pairs[this.pair,]$gwalk))
+                walks = readRDS(gp)
+                walks = walks[! unlist(lapply(walks, function(w)  any(! seqlevelsInUse(w) %in% c(1:22, "X", "Y", "M", "MT"))))]
+                wj = .walks2juncs(walks)
+                if (length(wj)>0)
+                {
+                    values(wj)$w1 = width(parse.gr(values(wj)$seg1))
+                    values(wj)$w2 = width(parse.gr(values(wj)$seg2))
+                    values(wj)$ab.id = as.data.table(ra.overlaps(wj, junctions, pad = 2, maxgap = -1L, minoverlap = 0L))[, ra2.ix[1], keyby = ra1.ix][.(1:length(wj)), V1]
+                    ## jclass = fread(pairs[this.pair, junc_sig_prob])[, ra_class[1], keyby = grl.ix]
+                    if (is.na(jclassp)) {
+                        jclass = ra_sig_classify(junctions, class_levels)[[1]][, ra_class[1], keyby = grl.ix]                        
+                    } else {
+                        jclass = fread(jclassp)
+                    }
+                    values(wj)$cn = values(junctions)[values(wj)$ab.id, "cn"]
+                    ## return(data.table(pair = this.pair, ab.id = values(wj)$ab.id, cn = values(wj)$cn)) # used to get a sense of junction copy number across all CCLE
+                    #' collapsing all copy number greater than 3
+                    cn_lab = sprintf("cn%s", factor(as.character(pmin(values(wj)$cn, 3)), levels = c("1", "2", "3"),  labels = c("1", "2", "3+")))
+                    jclass_cn = paste0(jclass[.(values(wj)$ab.id), V1], "_", cn_lab)
+                    values(wj)$jclass = jclass[.(values(wj)$ab.id), V1]
+                    values(wj)$iclass1 =  .wclass(values(wj)$w1)
+                    values(wj)$iclass2 = .wclass(values(wj)$w2)
+                    values(wj)$jclass_cn = jclass_cn
+                    values(wj)$cn_lab = cn_lab
+                    if (!with_cn) {
+                        wann = as.data.table(values(wj))[, .(
+                                                token = c(as.vector(rbind(iclass1, jclass)), iclass2[.N]),
+                                                type = c(as.vector(rbind(rep('interval', .N), rep('junction',.N))), 'interval')
+                                            ), keyby = walk]
+                    } else {
+                        wann = as.data.table(values(wj))[, .(
+                                                ## token = c(as.vector(rbind(iclass1, jclass)), iclass2[.N]),
+                                                token = c(as.vector(rbind(iclass1, jclass, cn_lab)), iclass2[.N]),
+                                                type = c(as.vector(rbind(rep('interval', .N), rep('junction',.N), rep('junc_cn',.N))), 'interval')
+                                            ), keyby = walk]
+                        remove_these = wann[type == "junc_cn"][!token %in% c("cn1", "cn2", "cn3+")][["walk"]]
+                        wann = wann[! walk %in% remove_these]
+                    }
+                    wann$pair = this_id
+                }
+            }
+            outpath = rm_mparen(paste0(normalizePath(outdir), "/", this_id, ".rds"))
+            saveRDS(wann, outpath)
+            message('Dumped ', this_id)
+            return(data.table(id = this_id, status = "fine", path = outpath))
+        }, error = function(e) data.table(id = this_id, status = "error", path = NA))
+    }, gwalk_path, jabba_path, j_class_path, id)
+    return(rbindlist(out_tbl))
+}
+
+
+write_seq_to_fasta = function(sequences, alphabet  = NULL, outdir, alphabet_fn = NULL, sequence_fn = NULL) {
+    if (is.null(sequence_fn)) {
+        sequence_fn = "/sequences.fa"
+    }
+    if (is.null(alphabet_fn)) {
+        alphabet_fn = "/alphabet.file"
+    }
+    if (is.null(alphabet)) {
+        if (is.character(sequences))
+        sequences = DNAStringSet(sequences)
+        if (is.null(names(sequences))) 
+            names(sequences) = as.character(1:length(sequences))
+        writeXStringSet(sequences, rm_mparen(paste0(outdir, "/", sequence_fn)))
+    } else {
+        alphabet.path = rm_mparen(paste0(outdir, "/", alphabet_fn))
+        writeLines(c("ALPHABET custom", alphabet), alphabet.path)
+        if (is.null(names(sequences))) 
+            names(sequences) = 1:length(sequences)
+        writeLines(as.vector(rbind(paste0(">", names(sequences)), 
+                                   sequences)), rm_mparen(paste0(outdir, "/", sequence_fn)))
+    }
+}
+
+
+
+
+make_indel_synteny = function(vars, ref_field, alt_field, make_gchain = TRUE, make_list = !make_gchain) {
+    is_indel = nchar(gv(vars, ref_field)) - nchar(gv(vars, alt_field)) != 0
+    vars = sort(vars[is_indel])
+    vars = vars[, c(ref_field, alt_field)]
+
+    if (!inherits(gv(vars, ref_field), "character")) {
+        if (inherits(gv(vars, ref_field), "DNAStringSet")) {
+            mcols(vars)[, ref_field] = as.character(gv(vars, ref_field))
+        } else {
+            stop("ref_field must be character or DNAStringSet")
+        }
+    }
+
+    if (!inherits(gv(vars, alt_field), "character")) {
+        if (inherits(gv(vars, alt_field), "DNAStringSetList")) {
+            alt_split = S4Vectors::unstrsplit(gv(vars, alt_field), sep = ",")
+
+            ## just take 1st haplotype for now
+            char_alt = sub("^([A-Z]*)(\\,)([A-Z]*)", "\\1", alt_split)
+
+            ## ## for 2nd haplotype
+            ## alt_hi_2 = sub("^([A-Z]*)(\\,)([A-Z]*)", "\\3", alt_hi_split)
+
+            mcols(vars)[, alt_field] = as.character(char_alt)
+            rm(list = c('char_alt', "alt_split"))
+        } else {
+            stop("alt_field must be character or DNAStringSetList")
+        }
+    }
+    
+    mcols(vars)[nchar(gv(vars, alt_field)) - nchar(gv(vars, ref_field)) > 0,"type"] = "INS"
+    mcols(vars)[nchar(gv(vars, alt_field)) - nchar(gv(vars, ref_field)) < 0,"type"] = "DEL"
+
+    gp = gaps(vars) %Q% (strand == "*")
+    full_g = sort(grbind(gp, vars))
+    ## mcols(full_g)[["delta_len"]] = nchar(gv(full_g, "haplotype_1")) - nchar(gv(full_g, "REF"))
+    mcols(full_g)[["delta_len"]] = nchar(gv(full_g, alt_field)) - nchar(gv(full_g, ref_field))
+    mcols(full_g)[is.na(gv(full_g, ref_field)),][["delta_len"]] = 0
+    dt = gr2dt(full_g)
+
+    ## dt[, REF := ifelse(is.na(REF), "", REF)]
+    ## dt[, haplotype_1 := ifelse(is.na(haplotype_1), "", haplotype_1)]
+    ## dt[, shift_by := pmax(c(0, head(nchar(ALT) - nchar(REF), -1)), 0), by = seqnames]
+    set(dt, j = ref_field, value = ifelse(is.na(dt[[ref_field]]), "", dt[[ref_field]]))
+    set(dt, j = alt_field, value = ifelse(is.na(dt[[alt_field]]), "", dt[[alt_field]]))
+    ## dt[, shift_by := pmax(c(0, head(nchar(eval(parse(text = alt_field))) - nchar(eval(parse(text = ref_field))), -1)), 0), by = seqnames]
+    dt[, shift_by := c(0, head(nchar(eval(parse(text = alt_field))) - nchar(eval(parse(text = ref_field))), -1)), by = seqnames]
+    dt[, cum_shift := cumsum(shift_by), by = seqnames]
+    ## dt[, cum_shift := cumsum(delta_len), by = seqnames]
+    wid_c_dt = dt[, list(wid_change = sum(delta_len)), by = seqnames]
+    wid_change = wid_c_dt[, setNames(wid_change, seqnames)]
+    seqlevels(new_gr, pruning.mode = "coarse") = seqlevels(vars)
+    seqlengths(new_gr) = seqlengths(vars)
+    if (is.null(seqlengths(vars))) {
+        new_gr = dt2gr(dt)
+    } else {
+        new_gr = dt2gr(dt, seqlengths = seqlengths(vars))
+    }
+    ## synt_gr = copy(new_gr)
+
+    ## reduce length of deletion granges
+    ix = na2false(new_gr$type == "DEL")
+    new_gr[ix] = gr.width(new_gr[ix], width(new_gr[ix]) + mcols(new_gr[ix])[["delta_len"]])
+    ## new_gr = gr.width(new_gr, width(new_gr) + mcols(new_gr)[["delta_len"]])
+    
+    ## new_gr = GenomicRanges::shift(new_gr, mcols(new_gr)[["cum_shift"]])
+
+    synt_gr = new_gr
+    
+
+    ## synt_gr = gr.width(synt_gr, width(synt_gr) + mcols(synt_gr)[["delta_len"]])
+    synt_gr = GenomicRanges::shift(synt_gr, mcols(synt_gr)[["cum_shift"]])
+
+    ## count up bases in new coordinates
+    ## this_grl = split(new_gr, seqnames(new_gr))
+    
+    ## synt_grl = GRangesList(ret_no_err(lapply(seq_along(this_grl), function(i) {
+    ##     try({
+    ##         browser()
+    ##         g = this_grl[[i]]
+    ##         new_ends = cumsum(width(g))
+    ##         new_starts = c(1, head(new_ends+1, -1))
+    ##         return(GRanges(seqnames(g), IRanges(new_starts, new_ends)))
+    ##     }, silent = TRUE)
+    ## })))
+
+    ## synt_gr = unlist(synt_grl)
+    ## mcols(synt_gr) = mcols(new_gr)
+    seqlevels(synt_gr, pruning.mode = "coarse") = seqlevels(vars)
+    seqlengths(synt_gr) = seqlengths(vars) + wid_change[names(seqlengths(vars))]
+
+    ## shift to account for insertions
+    ## synt_gr = GenomicRanges::shift(synt_gr, synt_gr$shift_by)
+    ## synt_gr = GenomicRanges::shift(synt_gr, mcols(synt_gr)[["cum_shift"]])
+
+
+    if(make_gchain) {
+        return(gChain(new_gr, synt_gr))
+    } else if (make_list) {
+        return(list(orig_coord_gr = new_gr, synt_coord_gr = synt_gr))
+    }
+}
+
+
+### functionality to add onto gr2seq
+#' browser() within gr2seq()
+#' see ~/Projects/Simulation/sim_utils.R
+
+
+refalt2char = function(vars, ref_field, alt_field)
+{
+    if (!inherits(gv(vars, ref_field), "character")) {
+        if (inherits(gv(vars, ref_field), "DNAStringSet")) {
+            mcols(vars)[, ref_field] = as.character(gv(vars, ref_field))
+        } else {
+            stop("ref_field must be character or DNAStringSet")
+        }
+    }
+
+    if (!inherits(gv(vars, alt_field), "character")) {
+        if (inherits(gv(vars, alt_field), "DNAStringSetList")) {
+            alt_split = S4Vectors::unstrsplit(gv(vars, alt_field), sep = ",")
+
+            ## just take 1st haplotype for now
+            char_alt = sub("^([A-Z]*)(\\,)([A-Z]*)", "\\1", alt_split)
+
+            ## ## for 2nd haplotype
+            ## alt_hi_2 = sub("^([A-Z]*)(\\,)([A-Z]*)", "\\3", alt_hi_split)
+
+            mcols(vars)[, alt_field] = as.character(char_alt)
+            rm(list = c('char_alt', "alt_split"))
+        } else {
+            stop("alt_field must be character or DNAStringSetList")
+        }
+    }
+    return(vars)
+}
+
+## all.equal.mult <- function(..., ignore.null = FALSE) {
+
+##     names <- as.character(substitute(list(...)))[-1L]
+##     if (ignore.null) {
+##         idx = !grepl("^NULL$", names)
+##         names = names[idx]
+##     } else {
+##         idx = 1:length(list(...))
+##     }
+##                                         # more than one object required
+##     if (length(list(...)[idx]) < 2) stop("More than one object required")
+
+##                                         # character vector of object names
+##     ## names <- as.character(substitute(list(...)))[-1L]
+
+##     if (length(names) == 1 & is.list(eval(parse(text = names[1])))) {
+##         lst = eval(parse(text = names[1]))
+##         names(lst) = 1:length(lst)
+##     } else {
+##         lst = list(...)
+##     } ## for list capability -- will figure out later
+
+    
+    
+##                                         # matrix of object name pairs
+##     pairs <- t(combn(names, 2))
+
+##                                         # if only two objects, return one item list containing all.equal() for them
+##     ## if (nrow(pairs) == 1) return(list(all.equal(get(pairs[1,1]), get(pairs[1,2]))))
+##     if (nrow(pairs) == 1) return(list(all.equal(eval(parse(text = pairs[1,1])), eval(parse(text = pairs[1,2])))))
+
+##                                         # function: eq.fun()
+##                                         # description: applies all.equal() to two quoted names of objects
+##                                         # input: two quoted names of objects
+##                                         # output: list containing all.equal() comparison and "[obj1] vs. [obj2]"
+##                                         # examples:
+##                                         #   x <- 1
+##                                         #   y <- 1
+##                                         #   z <- 2
+##                                         #   eq.fun("x", "y") # list(TRUE, "x vs. y")
+##                                         #   eq.fun("x", "z") # list("Mean relative difference: 1", "x vs. z")
+##     eq.fun <- function(x, y, this_env = parent.frame(2)) {
+##         all.eq  = all.equal(eval(parse(text = x), envir = this_env), eval(parse(text = y), envir = this_env))
+##         ## all.eq <- all.equal(get(x, inherits=TRUE), get(y, inherits=TRUE))
+##         name <- paste0(x, " vs. ", y)
+##         return(list(all.eq, name))
+##     }
+
+##                                         # list of eq.fun object comparisons
+##     out <- vector(mode="list", length=nrow(pairs))
+
+##     for (x in 1:nrow(pairs)) {
+##         eq.list <- eq.fun(pairs[x, 1], pairs[x, 2])
+##         out[[x]] <- eq.list[[1]]
+##         names(out)[x] <- eq.list[[2]]
+##     }
+
+##                                         # return TRUE if all objects equal, comparison list otherwise
+##     if (mode(unlist(out)) == "logical") {return(TRUE)} else {return(out)}
+## }
+
+
+all.equal.mult <- function(..., ignore.null = FALSE) {
+
+    names <- as.character(substitute(list(...)))[-1L]
+    if (ignore.null) {
+        idx = !grepl("^NULL$", names)
+        names = names[idx]
+    } else {
+        idx = 1:length(list(...))
+    }
+                                        # more than one object required
+    if (length(list(...)[idx]) < 2) stop("More than one object required")
+
+                                        # character vector of object names
+    ## names <- as.character(substitute(list(...)))[-1L]
+
+    if (length(names) == 1 & is.list(eval(parse(text = names[1])))) {
+        lst = eval(parse(text = names[1]))
+    } else {
+        lst = list(...)
+        names(lst) = names
+    } ## for list capability -- will figure out later
+
+    
+    
+                                        # matrix of object name pairs
+    pairs = t(combn(1:length(lst), 2))
+    
+
+                                        # if only two objects, return one item list containing all.equal() for them
+    if (nrow(pairs) == 1) return(list(all.equal(lst[[pairs[1,1]]], lst[[pairs[1,2]]])))
+
+                                        # function: eq.fun()
+                                        # description: applies all.equal() to two quoted names of objects
+                                        # input: two quoted names of objects
+                                        # output: list containing all.equal() comparison and "[obj1] vs. [obj2]"
+                                        # examples:
+                                        #   x <- 1
+                                        #   y <- 1
+                                        #   z <- 2
+                                        #   eq.fun("x", "y") # list(TRUE, "x vs. y")
+                                        #   eq.fun("x", "z") # list("Mean relative difference: 1", "x vs. z")
+    eq.fun <- function(x, y, this_env = parent.frame(2)) {
+        all.eq  = all.equal(lst[[x]], lst[[y]])
+        ## all.eq <- all.equal(get(x, inherits=TRUE), get(y, inherits=TRUE))
+        name <- paste0(x, " vs. ", y)
+        return(list(all.eq, name))
+    }
+
+                                        # list of eq.fun object comparisons
+    out <- vector(mode="list", length=nrow(pairs))
+
+    for (x in 1:nrow(pairs)) {
+        eq.list <- eq.fun(pairs[x, 1], pairs[x, 2])
+        out[[x]] <- eq.list[[1]]
+        names(out)[x] <- eq.list[[2]]
+    }
+
+                                        # return TRUE if all objects equal, comparison list otherwise
+    if (mode(unlist(out)) == "logical") {return(TRUE)} else {return(out)}
+}
+
+hmap2_breaks = function(inputmat, mid = 0, n_breaks = 100, palette = "RdYlBu", n_col = 11, rev_col = FALSE)
+{
+    if (n_col %% 2 == 0) {
+        message('n_col should be an odd number')
+        n_col = n_col + 1
+    }
+    breaks <- seq(from=min(range(inputmat)), to=max(range(inputmat)), length.out=n_breaks)
+    midpoint <- which.min(abs(breaks - mid))
+    these_cols = brewer.master(n_col, palette)
+    if (rev_col) {
+        these_cols = rev(these_cols)
+    }
+    col1 = these_cols[1:ceiling(length(these_cols)/2)]
+    col2 = these_cols[(ceiling(length(these_cols)/2)):length(these_cols)]
+    rampCol1 <- colorRampPalette(col1)(midpoint)
+    rampCol2 <- colorRampPalette(col2)(n_breaks-(midpoint+1))
+    rampCols <- c(rampCol1,rampCol2)
+    return(list(breaks = breaks, col = rampCols))
 }
