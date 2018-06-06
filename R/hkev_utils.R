@@ -1288,7 +1288,7 @@ no_arg = function(as.list = TRUE, calling_env = parent.frame()) {
 }
 
 
-gsub_col = function(pattern, replacement, df) {
+gsub_col = function(patterns, replacements, df) {
     ## for (i in 1:ncol(df)) {
     ##     this_colname = colnames(df)[i]
     ##     if (length(pattern) > 1 & length(replacement) > 1) {
@@ -1298,9 +1298,9 @@ gsub_col = function(pattern, replacement, df) {
     ##     }
     ##     df = setnames(df, this_colname, new_colname)
     ## }
-    for (i in 1:length(pattern)) {
+    for (i in 1:length(patterns)) {
         these_cols = colnames(df)
-        new_cols = gsub(pattern[i], replacement[i], these_cols)
+        new_cols = gsub(patterns[i], replacements[i], these_cols)
         if (length(new_cols) > 0) {
             colnames(df) = new_cols
             ## df = setnames(df, these_cols, new_cols)
@@ -1314,7 +1314,7 @@ gsub_col = function(pattern, replacement, df) {
 
 grl.expand = function(grl, expand_win) {
     tmp_vals = mcols(grl)
-    tmp_gr = unlist(grl)
+    tmp_gr = unlist(grl, use.names = FALSE)
     tmp_gr = tmp_gr + expand_win
     new_grl = relist(tmp_gr, grl)
     mcols(new_grl) = tmp_vals
@@ -1323,7 +1323,7 @@ grl.expand = function(grl, expand_win) {
 
 grl.shrink = function(grl, shrink_win) {
     tmp_vals = mcols(grl)
-    tmp_gr = unlist(grl)
+    tmp_gr = unlist(grl, use.names = FALSE)
     tmp_gr = tmp_gr - shrink_win
     new_grl = relist(tmp_gr, grl)
     mcols(new_grl) = tmp_vals
@@ -1333,7 +1333,7 @@ grl.shrink = function(grl, shrink_win) {
 
 grl.start = function(grl, width = 1, force = FALSE, ignore.strand = TRUE, clip = TRUE) {
     tmp_vals = mcols(grl)
-    tmp_gr = unlist(grl)
+    tmp_gr = unlist(grl, use.names = FALSE)
     tmp_gr = gr.start(tmp_gr, width, force, ignore.strand, clip)
     new_grl = relist(tmp_gr, grl)
     mcols(new_grl) = tmp_vals
@@ -1342,7 +1342,7 @@ grl.start = function(grl, width = 1, force = FALSE, ignore.strand = TRUE, clip =
 
 grl.end = function(grl, width = 1, force = FALSE, ignore.strand = TRUE, clip = TRUE) {
     tmp_vals = mcols(grl)
-    tmp_gr = unlist(grl)
+    tmp_gr = unlist(grl, use.names = FALSE)
     tmp_gr = gr.end(tmp_gr, width, force, ignore.strand, clilp)
     new_grl = relist(tmp_gr, grl)
     mcols(new_grl) = tmp_vals
@@ -1362,7 +1362,7 @@ gr.width = function(gr, w = width(gr)) {
 
 grl.width = function(grl, w = width(grl)) {
     tmp_vals = mcols(grl)
-    tmp_gr = unlist(grl)
+    tmp_gr = unlist(grl, use.names = FALSE)
     gr.width(tmp_gr) = w
     new_grl = relist(tmp_gr, grl)
     mcols(new_grl) = tmp_vals
@@ -1397,7 +1397,7 @@ grep_order = function(patterns, text, return_na = FALSE, first_only = FALSE) {
     return(unlist(match_lst))
 }
 
-grep_col_sort = function(patterns, df, all_cols = TRUE) {
+grep_col_sort = function(patterns, df, all_cols = TRUE, match_first = TRUE) {
     is.data.table = FALSE
     if (inherits(df, "data.table")) {
         df = as.data.frame(df)
@@ -1406,7 +1406,11 @@ grep_col_sort = function(patterns, df, all_cols = TRUE) {
     new_col_order = grep_order(patterns, text = colnames(df), return_na = FALSE, first_only = FALSE)
     if (all_cols) {
         other_cols = setdiff(1:ncol(df), new_col_order)
-        col_ix = c(other_cols, new_col_order)
+        if (!match_first) {
+            col_ix = c(other_cols, new_col_order)
+        } else {
+            col_ix = c(new_col_order, other_cols)
+        }
     } else {
         col_ix = new_col_order
     }
@@ -2071,3 +2075,4 @@ hmap2_breaks = function(inputmat, mid = 0, n_breaks = 100, palette = "RdYlBu", n
     rampCols <- c(rampCol1,rampCol2)
     return(list(breaks = breaks, col = rampCols))
 }
+
